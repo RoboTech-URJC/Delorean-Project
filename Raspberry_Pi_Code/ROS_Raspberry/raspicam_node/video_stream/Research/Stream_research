@@ -1,0 +1,101 @@
+Para empezar el stream de video:
+
+raspividyuv -n -t 0 -fps 25 -w 960 -h 544 -o - | ffmpeg -f rawvideo -pixel_format yuv420p -s:v 960x544 -i /dev/stdin -c:v mjpeg -f mjpeg udp://localhost:1234
+
+para ver el stream de video:
+
+ffplay udp://localhost:1234
+
+
+o para grabarlo:
+
+ffmpeg -i udp://localhost:1234 -c copy test.mjpeg
+
+si por ejemplo, quieres hacer un stream de la rpi al ordenador, tienes que hacer que en la primera instrucción en vez de localhost tienes que poner la dirección ip de la máquina a la que quieres enviar el stream
+
+
+------------------------------------------con mjpeg calidad decente
+
+ffplay -fflags nobuffer -flags low_delay -framedrop -strict experimental udp://localhost:1234
+
+raspividyuv -n -t 0 -fps 25 -w 960 -h 544 -o - | ffmpeg -f rawvideo -pixel_format yuv420p -s:v 960x544 -i /dev/stdin -c:v mjpeg -q 10 -f mjpeg udp://localhost:1234
+
+------------------------------------------con theora
+
+raspividyuv -n -t 0 -fps 25 -w 960 -h 544 -o - | ffmpeg -f rawvideo -pixel_format yuv420p -s:v 960x544 -i /dev/stdin -c:v libtheora -g 10 -q 10  -f ogg udp://localhost:1234
+
+(vamos a optimizarlo un poco)
+
+
+raspividyuv -n -t 0 -fps 20 -w 960 -h 544 -o - | ffmpeg -f rawvideo -pixel_format yuv420p -s:v 960x544 -i /dev/stdin -c:v libtheora -q:v 1 -f ogv udp://192.168.1.126:1234
+
+
+
+----------------------------------------con h264
+
+(este es genérico)
+
+raspividyuv -n -t 0 -fps 25 -w 960 -h 544 -o - | ffmpeg -f rawvideo -pixel_format yuv420p -s:v 960x544 -i /dev/stdin -c:v libx264 -preset ultrafast -f mpegts udp://localhost:1234
+
+(este es con bajo retardo y hd) puedes cambiar la resolución si lo deseas
+
+raspividyuv -n -t 0 -fps 20 -w 1280 -h 720 -o - | ffmpeg -f rawvideo -pixel_format yuv420p -s:v 1280x720 -i /dev/stdin -c:v libx264 -preset ultrafast -g 5 -f mpegts udp://192.168.1.126:1234
+
+
+
+--------------------------------------STREMEAR AL BROADCAST
+
+Es igual, sólo que en la parte del final:
+
+... udp://192.168.1.255:1234?broadcast=1
+
+
+
+-------------------------------------STREMEAR CON NETCAT Y MPLAYER
+RETARDO EXTREMADAMENTE BAJO
+
+primero, poner a escuchar al cliente:
+
+nc.traditional -l -p 5000 | mplayer -fps 60 -cache 1024 -
+
+luego, hacer el stream en el servidor
+
+/opt/vc/bin/raspivid -w 950 -h 544 -fps 30 -g 0 -o - -t 10000000 | nc.traditional 192.168.1.101 5000
+
+por defecto, el stream utiliza TCP, he probado UDP pero no parece funcionar, hay pérdida de paquetes incluso en red local
+
+si en vez de stremear vídeo de una cámara se quiere transmitir un fichero, entonces:
+
+nc.traditional 192.168.1.101 5000 < big_buck_bunny_1080p_stereo.avi
+
+
+otra manera de hacerlo seria (a probar):
+
+cliente
+
+netcat -l -p 5000 | mplayer -fps 60 -cache 1024 –
+
+servidor
+
+raspivid -t 0 -w 1280 -h 720 -o – | nc 192.168.1.39 5000
+
+
+------------------------------------STREMEAR CON GSTREAMER
+
+server:
+
+gst-launch -v v4l2src ! "image/jpeg,width=160,height=120,framerate=30/1" ! rtpjpegpay ! udpsink host=192.168.2.3 port=5001
+
+client (windows)
+
+gst-launch-1.0.exe -e -v udpsrc port=5001 ! application/x-rtp, encoding-name=JPEG, payload=26 ! rtpjpegdepay ! jpegdec ! autovideosink
+
+
+-----------------------UV4L Y WEBRTC
+
+https://www.linux-projects.org/uv4l/installation/
+
+https://github.com/ShubhamCpp/RaspiCam-UV4L
+
+https://github.com/kclyu/rpi-webrtc-streamer-deb
+
